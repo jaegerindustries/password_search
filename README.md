@@ -11,7 +11,7 @@ Password Search is invoked through the command line:
 php password_search.php \<directory\> \<report\>
 
 Where:
-* \<directory\> is directory to search for passwords
+* \<directory\> is the directory to start searching for passwords (The search include all sub-directories)
 * \<report\> is the path to the report file
 
 Report are written in CSV (Comma Separated Values) format.  You can open them with a variety of software, including Microsoft Excel.
