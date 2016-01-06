@@ -135,13 +135,13 @@ function make_path($path)
 function list_files($dir)
 {
 	$result = array();
-	if(is_dir($dir) === TRUE) {
+	if(TRUE === is_dir($dir)) {
 		$files = array_diff(scandir($dir), array('.', '..'));
 		foreach ($files as $file) {
-			if (is_dir("$dir/$file") === TRUE) {
-				$result = array_merge(list_files("$dir/$file"), $result);
+			if (TRUE === is_dir($dir . DIRECTORY_SEPARATOR  . $file)) {
+				$result = array_merge(list_files($dir. DIRECTORY_SEPARATOR . $file), $result);
 			} else {
-				$result[] = "$dir/$file";
+				$result[] = $dir . DIRECTORY_SEPARATOR . $file;
 			}
 		}
 	}
