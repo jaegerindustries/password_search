@@ -201,7 +201,7 @@ $stats_password_number = 0;
 $files = list_files($path_search);
 foreach ($files as $file) {
 	$path_parts = pathinfo($file);
-	if ((TRUE == in_array($path_parts['extension'], $array_extensions)) && (realpath($file) != realpath($filename_report))) {
+	if ((array_key_exists('extension', $path_parts) && in_array($path_parts['extension'], $array_extensions)) && (realpath($file) != realpath($filename_report))) {
 		echo '.';
 		$stats_line_number = 1;
 		$handle = fopen($file, 'r');
