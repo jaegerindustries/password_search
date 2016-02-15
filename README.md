@@ -25,3 +25,7 @@ Password search works by combining keywords and regular expressions.  You can ch
 ## Contributing
 
 Bug reports and suggestions for improvements are most welcome.  Of particular interest are keywords, API key formats, functions names or file names indicating the presence of credentials.
+
+## Contact
+
+If you have any questions, comments or suggestions, do not hesitate to contact me at philippe@jaegerindustries.com
