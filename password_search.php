@@ -4,7 +4,7 @@
  *
  *  Password Search
  *
- *  Copyright (c) 2015, Philippe Paquet
+ *  Copyright (c) 2015-2016, Philippe Paquet
  *  All rights reserved.
  *  
  *  Redistribution and use in source and binary forms, with or without modification,
@@ -33,6 +33,25 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *
  */
+
+$array_extension_regex = array(
+	// Cryptographic key
+	array("/asc/i", "Potential cryptographic key bundle"),
+	array("/p12/i", "Potential cryptographic key bundle"),
+	array("/pem/i", "Potential cryptographic private key"),
+	array("/pfx/i", "Potential cryptographic key bundle"),
+	array("/pkcs12/i", "Potential cryptographic key bundle"),
+	// Password database file
+	array("/agilekeychain/i", "1Password database file"),
+	array("/kdb/i", "KeePass database file"),
+	array("/kdbx/i", "KeePassdatabase file"),
+	array("/keychain/i", "Apple Keychain database file"),
+	array("/kwallet/i", "KDE Wallet Manager database file"),
+	array("/pwm/i", "PwManager database file"),
+	// VPN configuration files
+	array("/ovpn/i", "OpenVPN configuration file"),
+	array("/tblk/i", "Tunnelblick configuration file"),
+);
 
 $array_regex = array(
 	"/'\S*KEYWORD'\s*?,\s*?'\S+?'/i",
@@ -74,6 +93,7 @@ $array_keywords = array(
 	"pass",
 	"passphrase",
 	"password",
+	"passwd",
 	"pwd",
 	"secret",
 	"token",
@@ -84,6 +104,7 @@ $array_extensions = array(
 	"cpp",
 	"cs",
 	"h",
+	"hpp",
 	"htm",
 	"html",
 	"ini",
@@ -112,11 +133,11 @@ $array_extensions = array(
 
 function make_path($path)
 {
-	$path = explode(DIRECTORY_SEPARATOR, $path);
+	$path = explode(DIRECTORY_SEPARATOR, realpath($path));
 	$rebuild = '';
 	foreach($path as $p) {
 		$rebuild .= "/$p";
-		if(is_dir($rebuild) === FALSE) {
+		if(FALSE == is_dir($rebuild)) {
 			mkdir($rebuild);
 		}
 	}
@@ -132,16 +153,30 @@ function make_path($path)
 //
 //
 
-function list_files($dir)
+function list_files($dir, $follow_links)
 {
 	$result = array();
-	if(TRUE === is_dir($dir)) {
+	if(TRUE == is_dir($dir)) {
 		$files = array_diff(scandir($dir), array('.', '..'));
 		foreach ($files as $file) {
-			if (TRUE === is_dir($dir . DIRECTORY_SEPARATOR  . $file)) {
-				$result = array_merge(list_files($dir. DIRECTORY_SEPARATOR . $file), $result);
+			if (TRUE == is_dir($dir . DIRECTORY_SEPARATOR  . $file)) {
+				$result = array_merge(list_files($dir. DIRECTORY_SEPARATOR . $file, $follow_links), $result);
 			} else {
-				$result[] = $dir . DIRECTORY_SEPARATOR . $file;
+				if (TRUE == is_file($dir . DIRECTORY_SEPARATOR . $file)) {
+					$result[] = $dir . DIRECTORY_SEPARATOR . $file;
+				} else {
+					if (TRUE == is_link($dir . DIRECTORY_SEPARATOR  . $file)) {
+						if (TRUE == $follow_links) {
+							if (TRUE == is_file(readlink($dir . DIRECTORY_SEPARATOR . $file))) {
+								$result[] = readlink($dir . DIRECTORY_SEPARATOR . $file);
+							} else {
+								if (TRUE == is_dir(readlink($dir . DIRECTORY_SEPARATOR . $file))) {
+									$result = array_merge(list_files(readlink($dir . DIRECTORY_SEPARATOR . $file), $follow_links), $result);
+								}
+							}
+						}
+					}
+				}
 			}
 		}
 	}
@@ -154,9 +189,9 @@ function list_files($dir)
 
 // Banner
 echo "\r\n";
-echo "Password Search v2.0\r\n";
+echo "Password Search v3.0\r\n";
 echo "\r\n";
-echo "Copyright 2015 Philippe Paquet, All Rights Reserved.\r\n";
+echo "Copyright 2015-2016 Philippe Paquet, All Rights Reserved.\r\n";
 echo "\r\n";
 
 // Parse arguments
@@ -194,36 +229,50 @@ foreach ($array_regex as $regex) {
 $array_regex_expanded = array_unique($array_regex_expanded);
 
 // Initialize statistics
-$stats_file_number = 0;
+$stats_processed_files_number = 0;
+$stats_analyzed_files_number = 0;
 $stats_password_number = 0;
+$stats_password_files_number = 0;
 
 // Go through the files
-$files = list_files($path_search);
+$files = list_files($path_search, FALSE);
 foreach ($files as $file) {
 	$path_parts = pathinfo($file);
-	if ((array_key_exists('extension', $path_parts) && in_array($path_parts['extension'], $array_extensions)) && (realpath($file) != realpath($filename_report))) {
-		echo '.';
-		$stats_line_number = 1;
-		$handle = fopen($file, 'r');
-		if (FALSE !== $handle) {
-			while (FALSE !== ($line = fgets($handle, 8192))) {
-				$line = trim($line);
-				foreach ($array_regex_expanded as $regex) {
-					preg_match_all($regex, $line, $matches, PREG_SET_ORDER);
-					foreach ($matches as $match) {
-						echo '*';
-						fputcsv($handle_report, array($file, $stats_line_number, $match[0]), ',');
-						$stats_password_number++;
-					}
-				}
-				$stats_line_number++;
+	if ((TRUE == array_key_exists('extension', $path_parts)) && (realpath($file) != realpath($filename_report))) {
+		$file_processed = FALSE;
+		foreach ($array_extension_regex as $regex) {
+			if (1 == preg_match($regex[0], $path_parts['extension'])) {
+				echo '*';
+				fputcsv($handle_report, array($file, 'n/a', $regex[1]), ',');
+				$stats_password_files_number++;
+				$file_processed = TRUE;
 			}
-			fclose($handle);
-		} else {
-			echo "\r\n";
-			echo "Cannot open $file\r\n";
 		}
-		$stats_file_number++;
+		if ((FALSE == $file_processed) && (TRUE == in_array($path_parts['extension'], $array_extensions))) {
+			echo '.';
+			$stats_line_number = 1;
+			$handle = fopen($file, 'r');
+			if (FALSE !== $handle) {
+				while (FALSE !== ($line = fgets($handle, 8192))) {
+					$line = trim($line);
+					foreach ($array_regex_expanded as $regex) {
+						preg_match_all($regex, $line, $matches, PREG_SET_ORDER);
+						foreach ($matches as $match) {
+							echo '*';
+							fputcsv($handle_report, array($file, $stats_line_number, $match[0]), ',');
+							$stats_password_number++;
+						}
+					}
+					$stats_line_number++;
+				}
+				fclose($handle);
+			} else {
+				echo "\r\n";
+				echo "Cannot open $file\r\n";
+			}
+			$stats_analyzed_files_number++;
+		}		
+		$stats_processed_files_number++;
 	}
 }
 
@@ -233,6 +282,9 @@ fclose($handle_report);
 // Display statistics
 echo "\r\n";
 echo "\r\n";
-echo "$stats_file_number files analyzed\r\n";
+echo "$stats_processed_files_number files processed\r\n";
+echo "$stats_analyzed_files_number files analyzed\r\n";
+echo "\r\n";
+echo "$stats_password_files_number potential credential files found\r\n";
 echo "$stats_password_number potential passwords found\r\n";
 echo "\r\n";
